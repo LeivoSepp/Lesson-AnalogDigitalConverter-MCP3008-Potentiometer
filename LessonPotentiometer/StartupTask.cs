@@ -8,7 +8,7 @@ using Microsoft.Azure.Devices.Client;
 using Windows.Devices.Gpio;
 
 namespace LessonPotentiometer
-{
+{ 
     public sealed class StartupTask : IBackgroundTask
     {
         private SpiDevice SpiADC;
