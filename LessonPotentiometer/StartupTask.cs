@@ -75,14 +75,19 @@ namespace LessonPotentiometer
             {
                 int val = ReadADC(CHANNEL_SELECTION[1]);
                 SendMessages(val.ToString());
-                if (val > 1024 / 2)
+                if (val < 1024 / 3) //ADC value third low 0...341
                 {
                     redPin.Write(GpioPinValue.High);
                     greenPin.Write(GpioPinValue.Low);
                 }
-                else
+                else if (val > 1024 * 2 / 3) //ADC value third high 683...1024
                 {
                     redPin.Write(GpioPinValue.Low);
+                    greenPin.Write(GpioPinValue.High);
+                }
+                else //ADC value in the middle 342...682
+                {
+                    redPin.Write(GpioPinValue.High);
                     greenPin.Write(GpioPinValue.High);
                 }
                 Task.Delay(1000).Wait();
