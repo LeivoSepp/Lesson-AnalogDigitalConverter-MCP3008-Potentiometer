@@ -5,33 +5,51 @@ using Windows.Devices.Spi;
 using System.Threading.Tasks;
 using Microsoft.Devices.Tpm;
 using Microsoft.Azure.Devices.Client;
-
-// The Background Application template is documented at http://go.microsoft.com/fwlink/?LinkID=533884&clcid=0x409
+using Windows.Devices.Gpio;
 
 namespace LessonPotentiometer
 {
     public sealed class StartupTask : IBackgroundTask
     {
-        private const Int32 SPI_CHIP_SELECT_LINE = 0;       /* Line 0 maps to physical pin number 24 on the Rpi2        */
         private SpiDevice SpiADC;
         private readonly byte[] CHANNEL_SELECTION = { 0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0 }; //channels 1..8 for MCP3008
+        GpioPin greenPin, redPin;
 
-        public int ReadADC(byte channel)
+        private void initGpio()
         {
-            byte[] readBuffer = new byte[3]; /* Buffer to hold read data*/
-            byte[] writeBuffer = new byte[3] { 0x01, 0x00, 0x00 };
-            writeBuffer[1] = channel; //selecting ADC channel
+            int GREEN_LED_PIN = 35;
+            int RED_LED_PIN = 47;
+            var gpio = GpioController.GetDefault();
+            greenPin = gpio.OpenPin(GREEN_LED_PIN);
+            greenPin.SetDriveMode(GpioPinDriveMode.Output);
+            redPin = gpio.OpenPin(RED_LED_PIN);
+            redPin.SetDriveMode(GpioPinDriveMode.Output);
+        }
 
-            SpiADC.TransferFullDuplex(writeBuffer, readBuffer); /* Read data from the ADC */
+        private int ReadADC(byte channel)
+        {
+            byte[] readBuffer = new byte[3]; // Buffer to hold read data
+            byte[] writeBuffer = new byte[3] { 0x01, 0x00, 0x00 };
+            writeBuffer[1] = channel;
+
+            SpiADC.TransferFullDuplex(writeBuffer, readBuffer); // Read data from the ADC
             return ((readBuffer[1] & 3) << 8) + readBuffer[2]; //convert bytes to int
         }
         private async Task InitSPI()
         {
-            var settings = new SpiConnectionSettings(SPI_CHIP_SELECT_LINE);
-            settings.ClockFrequency = 500000;   /* 0.5MHz clock rate */
-            settings.Mode = SpiMode.Mode0;      /* The ADC expects idle-low clock polarity so we use Mode0  */
-            var controller = await SpiController.GetDefaultAsync(); 
-            SpiADC = controller.GetDevice(settings);
+            try
+            {
+                var settings = new SpiConnectionSettings(0); // 0 maps to physical pin number 24 on the Rpi2
+                settings.ClockFrequency = 500000;   // 0.5MHz clock rate
+                settings.Mode = SpiMode.Mode0;      // The ADC expects idle-low clock polarity so we use Mode0
+
+                var controller = await SpiController.GetDefaultAsync();
+                SpiADC = controller.GetDevice(settings);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("SPI Initialization Failed", ex);
+            }
         }
         private void initDevice()
         {
@@ -51,10 +69,22 @@ namespace LessonPotentiometer
         public async void Run(IBackgroundTaskInstance taskInstance)
         {
             await InitSPI();
+            initGpio();
             initDevice();
             while (true)
             {
-                SendMessages(ReadADC(CHANNEL_SELECTION[1]).ToString());
+                int val = ReadADC(CHANNEL_SELECTION[1]);
+                SendMessages(val.ToString());
+                if (val > 1024 / 2)
+                {
+                    redPin.Write(GpioPinValue.High);
+                    greenPin.Write(GpioPinValue.Low);
+                }
+                else
+                {
+                    redPin.Write(GpioPinValue.Low);
+                    greenPin.Write(GpioPinValue.High);
+                }
                 Task.Delay(1000).Wait();
             }
         }
