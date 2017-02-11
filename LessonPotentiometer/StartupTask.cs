@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Text;
 using Windows.ApplicationModel.Background;
 using Windows.Devices.Spi;
 using System.Threading.Tasks;
-using Microsoft.Devices.Tpm;
-using Microsoft.Azure.Devices.Client;
 using Windows.Devices.Gpio;
 
 namespace LessonPotentiometer
