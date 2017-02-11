@@ -12,9 +12,18 @@ namespace LessonPotentiometer
     public sealed class StartupTask : IBackgroundTask
     {
         private SpiDevice SpiADC;
-        private readonly byte[] CHANNEL_SELECTION = { 0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0 }; //channels 1..8 for MCP3008
         GpioPin greenPin, redPin;
-
+        private class Channel
+        {
+            public static byte C1 = 0x80;
+            public static byte C2 = 0x90;
+            public static byte C3 = 0xA0;
+            public static byte C4 = 0xB0;
+            public static byte C5 = 0xC0;
+            public static byte C6 = 0xD0;
+            public static byte C7 = 0xE0;
+            public static byte C8 = 0xF0;
+        }
         private void initGpio()
         {
             int GREEN_LED_PIN = 35;
@@ -51,30 +60,22 @@ namespace LessonPotentiometer
                 throw new Exception("SPI Initialization Failed", ex);
             }
         }
-        private void initDevice()
+        double rawRange = 1024; // 3.3v
+        double logRange = 5; // 3.3v = 10^5 lux
+        double RawToLux(int raw)
         {
-            TpmDevice device = new TpmDevice(0);
-            string hubUri = device.GetHostName();
-            string deviceId = device.GetDeviceId();
-            string sasToken = device.GetSASToken();
-            _sendDeviceClient = DeviceClient.Create(hubUri, AuthenticationMethodFactory.CreateAuthenticationWithToken(deviceId, sasToken), TransportType.Amqp);
-        }
-        private DeviceClient _sendDeviceClient;
-        private async void SendMessages(string strMessage)
-        {
-            string messageString = strMessage;
-            var message = new Message(Encoding.ASCII.GetBytes(messageString));
-            await _sendDeviceClient.SendEventAsync(message);
+            double logLux = raw * logRange / rawRange;
+            return Math.Pow(10, logLux);
         }
         public async void Run(IBackgroundTaskInstance taskInstance)
         {
             await InitSPI();
             initGpio();
-            initDevice();
             while (true)
             {
-                int val = ReadADC(CHANNEL_SELECTION[1]);
-                SendMessages(val.ToString());
+                int val = ReadADC(Channel.C1);
+                double lux = RawToLux(val);
+                string message = "raw: "+val+" lux: "+lux;
                 if (val < 1024 / 3) //ADC value third low 0...341
                 {
                     redPin.Write(GpioPinValue.High);
